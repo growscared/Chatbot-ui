@@ -1,89 +1,17 @@
-import { Brand } from "@/components/ui/brand"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { SubmitButton } from "@/components/ui/submit-button"
-import { createClient } from "@/lib/supabase/server"
-import { Database } from "@/supabase/types"
-import { createServerClient } from "@supabase/ssr"
-import { get } from "@vercel/edge-config"
-import { Metadata } from "next"
-import { cookies, headers } from "next/headers"
-import { redirect } from "next/navigation"
+"use client";
 
-export const metadata: Metadata = {
-  title: "Login"
-}
+import { signIn, signUp, handleResetPassword } from "@/lib/auth/actions";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { Brand } from "@/components/ui/brand";
 
-export default async function Login({
-  searchParams
-}: {
-  searchParams: { message: string }
-}) {
-  const cookieStore = cookies()
-  const supabase = createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        }
-      }
-    }
-  )
-  const session = (await supabase.auth.getSession()).data.session
-
-  if (session) {
-    const { data: homeWorkspace } = await supabase
-      .from("workspaces")
-      .select("*")
-      .eq("user_id", session.user.id)
-      .eq("is_home", true)
-      .single()
-
-    if (!homeWorkspace || !homeWorkspace.id) {
-      console.warn("⚠ No workspace found. Using fallback route.")
-      return redirect(`/en/chat`)
-    }
-
-    return redirect(`/${homeWorkspace.id}/chat`)
-  }
-
+export default function LoginPage({ searchParams }: { searchParams?: { message?: string } }) {
   return (
     <div className="flex w-full flex-1 flex-col justify-center gap-2 px-8 sm:max-w-md">
       <form
         className="animate-in text-foreground flex w-full flex-1 flex-col justify-center gap-2"
-        action={async (formData) => {
-          "use server"
-
-          const email = formData.get("email") as string
-          const password = formData.get("password") as string
-          const cookieStore = cookies()
-          const supabase = createClient(cookieStore)
-
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password
-          })
-
-          if (error) {
-            redirect(`/login?message=${error.message}`)
-          }
-
-          const { data: homeWorkspace } = await supabase
-            .from("workspaces")
-            .select("*")
-            .eq("user_id", data.user.id)
-            .eq("is_home", true)
-            .single()
-
-          if (!homeWorkspace) {
-            console.warn("No workspace found. Redirecting fallback.")
-            redirect("/en/chat")
-          }
-
-          redirect(`/${homeWorkspace.id}/chat`)
-        }}
+        action={signIn}
       >
         <Brand />
 
@@ -110,67 +38,27 @@ export default async function Login({
         <SubmitButton className="mb-2 rounded-md bg-blue-700 px-4 py-2 text-white">
           Login
         </SubmitButton>
-      </form>
 
-      <form
-        action={async (formData) => {
-          "use server"
-
-          const email = formData.get("email") as string
-          const password = formData.get("password") as string
-          const cookieStore = cookies()
-          const supabase = createClient(cookieStore)
-
-          const { error } = await supabase.auth.signUp({
-            email,
-            password
-          })
-
-          if (error) {
-            console.error(error)
-            redirect(`/login?message=${error.message}`)
-          }
-
-          redirect("/setup")
-        }}
-      >
-        <SubmitButton className="border-foreground/20 mb-2 rounded-md border px-4 py-2">
+        <SubmitButton formAction={signUp} className="border-foreground/20 mb-2 rounded-md border px-4 py-2">
           Sign Up
         </SubmitButton>
-      </form>
 
-      <form
-        action={async (formData) => {
-          "use server"
-          const origin = headers().get("origin")
-          const email = formData.get("email") as string
-          const cookieStore = cookies()
-          const supabase = createClient(cookieStore)
-
-          const { error } = await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: `${origin}/auth/callback?next=/login/password`
-          })
-
-          if (error) {
-            redirect(`/login?message=${error.message}`)
-          }
-
-          redirect("/login?message=Check email to reset password")
-        }}
-      >
         <div className="text-muted-foreground mt-1 flex justify-center text-sm">
           <span className="mr-1">Forgot your password?</span>
-          <button className="text-primary ml-1 underline hover:opacity-80">
+          <button
+            formAction={handleResetPassword}
+            className="text-primary ml-1 underline hover:opacity-80"
+          >
             Reset
           </button>
         </div>
-      </form>
 
-      {searchParams?.message && (
-        <p className="bg-foreground/10 text-foreground mt-4 p-4 text-center">
-          {searchParams.message}
-        </p>
-      )}
+        {searchParams?.message && (
+          <p className="bg-foreground/10 text-foreground mt-4 p-4 text-center">
+            {searchParams.message}
+          </p>
+        )}
+      </form>
     </div>
-  )
+  );
 }
